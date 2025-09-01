@@ -107,6 +107,8 @@ void DumpState(FILE* stream, Inst inst)
 }
 
 FILE* konataFile;
+bool konataStart = false;
+uint64_t konataStartCycle = 0;
 
 void Exit(int code)
 {
@@ -185,6 +187,7 @@ static uint64_t hpm4offset = 0;
 void LogPredec(Inst& inst)
 {
 #ifdef KONATA
+    konataStart = true;
     fprintf(konataFile, "I\t%u\t%u\t%u\n", inst.id, inst.fetchID, 0);
     // For return stack debugging
     /*fprintf(konataFile, "L\t%u\t%u\t (%.5ld) %d %.3x %.3x %.3x %.3x| \n", inst.id, 0, main_time, inst.retIdx,
@@ -265,7 +268,12 @@ void LogCycle()
     state.curCycInstRet = 0;
     registers.Cycle();
 #ifdef KONATA
-    fprintf(konataFile, "C\t1\n");
+    if (wrap->main_time > DEBUG_TIME && konataStart)
+    {
+        fprintf(konataFile, "C\t1\n");
+    } else if(wrap->main_time > DEBUG_TIME) {
+        konataStartCycle++;
+    }
 #endif
 }
 
@@ -550,7 +558,7 @@ void Initialize(int argc, char** argv, Args& args)
              args.progFile.find(".S", args.progFile.size() - 2) != std::string::npos)
     {
         if (system((std::string(TOOLCHAIN
-                                "as -mabi=ilp32 -march=rv32imac_zicsr_zfinx_zba_zbb_zbs_zicbom_zifencei -o temp.o ") +
+                                "as -mabi=ilp32 -march=rv32ima_zicsr_zifencei -o temp.o ") +
                     args.progFile)
                        .c_str()) != 0)
             abort();
@@ -739,7 +747,7 @@ void run_sim(Args& args, uint64_t timeout = 0)
     };
 
 #ifdef KONATA
-    konataFile = fopen("trace_konata.txt", "w");
+    konataFile = fopen("trace_konata.log", "w");
     fprintf(konataFile, "Kanata	0004\n");
 #endif
 
@@ -818,13 +826,13 @@ void run_sim(Args& args, uint64_t timeout = 0)
     }
 
     // Run a few more cycles ...
-    for (int i = 0; i < 128; i = i + 1)
-    {
-        wrap->HalfCycle();
-    }
+    // for (int i = 0; i < 128; i = i + 1)
+    // {
+    //     wrap->HalfCycle();
+    // }
 
     LogPerf(core);
-    printf("%lu cycles\n", wrap->main_time / 2);
+    printf("%lu cycles\n", (wrap->main_time / 2) - konataStartCycle);
 }
 
 void run_fuzz(Args& args)

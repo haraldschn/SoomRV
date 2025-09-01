@@ -140,8 +140,8 @@ void SpikeSimif::write_reg(int i, uint32_t data)
 }
 int SpikeSimif::cosim_instr(const Inst& inst)
 {
-    if (main_time > DEBUG_TIME)
-        processor->set_debug(true);
+    // if (main_time > DEBUG_TIME)
+    //     processor->set_debug(true);
     uint32_t initialSpikePC = get_pc();
     uint32_t instSIM;
     bool fetchFault = 0;

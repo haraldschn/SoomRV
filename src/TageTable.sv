@@ -59,7 +59,8 @@ always_ff@(posedge clk) begin
     end
 end
 always_comb begin
-    OUT_readValid = (tagRegA == tagRegB);
+    //OUT_readValid = (tagRegA == tagRegB);
+    OUT_readValid = 0;
 end
 
 always_comb begin

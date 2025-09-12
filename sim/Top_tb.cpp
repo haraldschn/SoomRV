@@ -24,6 +24,10 @@
 #include "Simif.hpp"
 #include "Debug.hpp"
 #include "slang/slang.hpp"
+
+#include "assembly_printer.hpp"
+#include "timing_printer.hpp"
+
 #define GET(type, raw) type{sc_bv<type::_size>{(char*)raw}}
 
 uint64_t DEBUG_TIME;
@@ -107,8 +111,11 @@ void DumpState(FILE* stream, Inst inst)
 }
 
 FILE* konataFile;
-bool konataStart = false;
-uint64_t konataStartCycle = 0;
+bool initOver = false;
+uint64_t initOverCycle = 0;
+
+AssemblyPrinter assemblyPrinter;
+TimingPrinter timingPrinter;
 
 void Exit(int code)
 {
@@ -125,6 +132,7 @@ void LogFlush(Inst& inst);
 
 void LogCommit(Inst& inst)
 {
+    timingPrinter.LogCommit(inst,  (wrap->main_time/2));
 #ifdef COSIM
     if (simif.doRestore)
         simif.restore_from_top(*wrap, inst);
@@ -177,6 +185,8 @@ void LogCommit(Inst& inst)
 #ifdef KONATA
         fprintf(konataFile, "S\t%u\t0\t%s\n", inst.id, "COM");
         fprintf(konataFile, "R\t%u\t%u\t0\n", inst.id, inst.sqn);
+        assemblyPrinter.write(inst, simif);
+
 #else
             // DumpState(inst.pc);
 #endif
@@ -186,8 +196,9 @@ void LogCommit(Inst& inst)
 static uint64_t hpm4offset = 0;
 void LogPredec(Inst& inst)
 {
+    timingPrinter.LogPredec(inst,  (wrap->main_time/2));
 #ifdef KONATA
-    konataStart = true;
+    initOver = true;
     fprintf(konataFile, "I\t%u\t%u\t%u\n", inst.id, inst.fetchID, 0);
     // For return stack debugging
     /*fprintf(konataFile, "L\t%u\t%u\t (%.5ld) %d %.3x %.3x %.3x %.3x| \n", inst.id, 0, main_time, inst.retIdx,
@@ -206,6 +217,7 @@ void LogPredec(Inst& inst)
 
 void LogDecode(Inst& inst)
 {
+    timingPrinter.LogDecode(inst,  (wrap->main_time/2));
 #ifdef KONATA
     fprintf(konataFile, "S\t%u\t0\t%s\n", inst.id, "RN");
 #endif
@@ -213,6 +225,7 @@ void LogDecode(Inst& inst)
 
 void LogFlush(Inst& inst)
 {
+    timingPrinter.LogFlush(inst,  (wrap->main_time/2));
 #ifdef KONATA
     fprintf(konataFile, "R\t%u\t0\t1\n", inst.id);
 #endif
@@ -220,6 +233,7 @@ void LogFlush(Inst& inst)
 
 void LogRename(Inst& inst)
 {
+    timingPrinter.LogRename(inst,  (wrap->main_time/2));
 #ifdef KONATA
     if (wrap->main_time > DEBUG_TIME)
     {
@@ -233,6 +247,7 @@ void LogRename(Inst& inst)
 
 void LogResult(Inst& inst)
 {
+    timingPrinter.LogResult(inst,  (wrap->main_time/2));
 #ifdef KONATA
     if (wrap->main_time > DEBUG_TIME)
     {
@@ -245,6 +260,7 @@ void LogResult(Inst& inst)
 
 void LogExec(Inst& inst)
 {
+    timingPrinter.LogExec(inst,  (wrap->main_time/2));
 #ifdef KONATA
     if (wrap->main_time > DEBUG_TIME)
     {
@@ -258,6 +274,7 @@ void LogExec(Inst& inst)
 
 void LogIssue(Inst& inst)
 {
+    timingPrinter.LogIssue(inst,  (wrap->main_time/2));
 #ifdef KONATA
     fprintf(konataFile, "S\t%u\t0\t%s\n", inst.id, "LD");
 #endif
@@ -268,11 +285,11 @@ void LogCycle()
     state.curCycInstRet = 0;
     registers.Cycle();
 #ifdef KONATA
-    if (wrap->main_time > DEBUG_TIME && konataStart)
+    if (wrap->main_time > DEBUG_TIME && initOver)
     {
         fprintf(konataFile, "C\t1\n");
     } else if(wrap->main_time > DEBUG_TIME) {
-        konataStartCycle++;
+        initOverCycle++;
     }
 #endif
 }
@@ -286,7 +303,25 @@ void LogInstructions()
 
     auto core = wrap->top->Top->soc->core;
 
-    bool brTaken = core->branch[0] & 1;
+    // Resulting trace indicates brTaken should be better named as branch miss-predict
+    auto predBr = GET(PredBranch, &core->ifetch->predBr);
+    auto branchInfo = GET(BranchProv, &core->branch);
+    bool brMisspred = core->branch[0] & 1;
+    bool L1IMiss = core->ifetch->ifp->__PVT__cacheMiss;
+
+    // if(initOver && predBr.valid) {
+    //     printf("PC=0x%x\n", core->ifetch->bp->__PVT__OUT_pc<<1);
+    //     printf("Cycle = %lu\n", (wrap->main_time/2)-timingPrinter.init_cycles);
+    //     printf("%s\n", predBr.to_string().c_str());
+    // }
+    if(initOver && brMisspred) {
+        timingPrinter.captureBrMispredict();
+        //printf("Cycle = %lu\n", (wrap->main_time/2)-timingPrinter.init_cycles);
+        //printf("%s\n", branchInfo.to_string().c_str());
+    }
+    if(initOver && L1IMiss) {
+        timingPrinter.captureL1IMiss();
+    } 
 
     // Issue
     for (size_t i = 0; i < LEN(core->LD_uop); i++)
@@ -392,8 +427,8 @@ void LogInstructions()
         }
     }
 
-    // Branch Taken
-    if (brTaken)
+    // Branch Misspredict
+    if (brMisspred)
     {
         auto branch = GET(BranchProv, core->branch.data());
 
@@ -647,6 +682,8 @@ void Initialize(int argc, char** argv, Args& args)
             fclose(dtbFile);
         }
     }
+
+    timingPrinter.init();
 }
 
 void LogPerf(VTop_Core* core)
@@ -749,6 +786,7 @@ void run_sim(Args& args, uint64_t timeout = 0)
 #ifdef KONATA
     konataFile = fopen("trace_konata.log", "w");
     fprintf(konataFile, "Kanata	0004\n");
+    assemblyPrinter.init();
 #endif
 
     auto core = wrap->core;
@@ -832,7 +870,11 @@ void run_sim(Args& args, uint64_t timeout = 0)
     // }
 
     LogPerf(core);
-    printf("%lu cycles\n", (wrap->main_time / 2) - konataStartCycle);
+    printf("%lu cycles\n", (wrap->main_time / 2));
+
+    fflush(konataFile);
+    fclose(konataFile);
+    assemblyPrinter.close();
 }
 
 void run_fuzz(Args& args)

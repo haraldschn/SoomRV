@@ -17,6 +17,8 @@
 #include "riscv/simif.h"
 #include "riscv/trap.h"
 
+#include <iomanip>
+
 class SpikeSimif : public simif_t
 {
   public:
@@ -88,6 +90,41 @@ class SpikeSimif : public simif_t
     std::string disasm(uint32_t instr)
     {
         return processor->get_disassembler()->disassemble(instr);
+    }
+
+    std::string disasm_timing(Inst& instr)
+    {
+        std::string input = processor->get_disassembler()->disassemble(instr.inst);
+    
+        // Extract the first token (before first space)
+        std::istringstream iss(input);
+        std::string opcode;
+        iss >> opcode;
+
+        // Extract the rest of the string after the first space
+        std::string remainder;
+        std::getline(iss, remainder);
+
+        // Trim leading spaces
+        size_t start = remainder.find_first_not_of(' ');
+        if (start != std::string::npos) {
+            remainder = remainder.substr(start);
+        } else {
+            remainder.clear();
+        }
+
+        // Build final string
+        std::ostringstream oss;
+        oss << opcode 
+            << " # 0x" << std::uppercase << std::hex 
+            << std::setw(8) << std::setfill('0') << instr.inst;
+
+        if (!remainder.empty()) {
+            oss << " [" << remainder << "]";  // Append the rest of the original string
+        }
+
+        std::string result = oss.str();
+            return result;
     }
 
     void restore_from_top(TopWrapper& wrap, Inst& inst);

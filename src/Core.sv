@@ -166,8 +166,8 @@ Rename#(.WIDTH_WR(NUM_PORTS)) rn
     .OUT_uop(RN_uop),
     .OUT_uopOrdering(RN_uopOrdering),
     .OUT_nextSqN(RN_nextSqN),
-    .OUT_nextLoadSqN(RN_nextLoadSqN),
-    .OUT_nextStoreSqN(RN_nextStoreSqN)
+    .OUT_nextLoadSqN(RN_nextLoadSqN),   // UNUSED
+    .OUT_nextStoreSqN(RN_nextStoreSqN)  // UNUSED
 );
 
 IS_UOp IS_uop[NUM_PORTS-1:0] /*verilator public*/;
@@ -693,7 +693,7 @@ MemController_Req BLSU_MC_if;
 ST_Ack LSU_stAck;
 
 CacheLineSetDirty LSU_setDirty;
-CacheMiss LSU_cacheMiss;
+CacheMiss LSU_cacheMiss /*verilator public*/;
 
 LoadStoreUnit lsu
 (

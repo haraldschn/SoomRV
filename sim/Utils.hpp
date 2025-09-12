@@ -1,4 +1,14 @@
 #pragma once
+
+#ifdef _WIN32
+#include <direct.h> // _mkdir on Windows
+#define MKDIR(path) _mkdir(path)
+#else
+#include <sys/stat.h> // mkdir on Unix/Linux
+#include <sys/types.h>
+#define MKDIR(path) mkdir(path, 0755)
+#endif
+
 #include "verilated.h"
 #include <stdint.h>
 #include <stddef.h>
@@ -37,4 +47,16 @@ void PrintBin (FILE* stream, uint64_t n)
     for (int i = 63; i >= 0; i=i-1)
         putc((n & (1UL << i)) ? '1' : '0', stream);
     putc('\n', stream);
+}
+
+// Helper: Ensure output directory exists
+void ensure_output_dir(const char *dir) {
+    if (MKDIR(dir) != 0) {
+        if (errno == EEXIST) {
+            // Directory already exists, this is fine
+            return;
+        }
+        perror("Error creating output directory");
+        exit(EXIT_FAILURE);
+    }
 }

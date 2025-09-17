@@ -17,6 +17,7 @@
 #include <getopt.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
+#include <chrono>
 
 #include "Fuzzer.hpp"
 #include "Inst.hpp"
@@ -132,7 +133,6 @@ void LogFlush(Inst& inst);
 
 void LogCommit(Inst& inst)
 {
-    timingPrinter.LogCommit(inst,  (wrap->main_time/2));
 #ifdef COSIM
     if (simif.doRestore)
         simif.restore_from_top(*wrap, inst);
@@ -181,11 +181,12 @@ void LogCommit(Inst& inst)
             Exit(-1);
         }
 #endif
-
+    
+    timingPrinter.LogCommit(inst,  (wrap->main_time/2));
+    assemblyPrinter.write(inst, simif);
 #ifdef KONATA
         fprintf(konataFile, "S\t%u\t0\t%s\n", inst.id, "COM");
         fprintf(konataFile, "R\t%u\t%u\t0\n", inst.id, inst.sqn);
-        assemblyPrinter.write(inst, simif);
 
 #else
             // DumpState(inst.pc);
@@ -304,24 +305,16 @@ void LogInstructions()
     auto core = wrap->top->Top->soc->core;
 
     // Resulting trace indicates brTaken should be better named as branch miss-predict
-    auto predBr = GET(PredBranch, &core->ifetch->predBr);
     auto branchInfo = GET(BranchProv, &core->branch);
     bool brMisspred = core->branch[0] & 1;
     bool L1IMiss = core->ifetch->ifp->__PVT__cacheMiss;
 
-    // if(initOver && predBr.valid) {
-    //     printf("PC=0x%x\n", core->ifetch->bp->__PVT__OUT_pc<<1);
-    //     printf("Cycle = %lu\n", (wrap->main_time/2)-timingPrinter.init_cycles);
-    //     printf("%s\n", predBr.to_string().c_str());
-    // }
     if(initOver && brMisspred) {
-        timingPrinter.captureBrMispredict();
-        //printf("Cycle = %lu\n", (wrap->main_time/2)-timingPrinter.init_cycles);
-        //printf("%s\n", branchInfo.to_string().c_str());
+        timingPrinter.captureBrMispredict(static_cast<int>(branchInfo.cause));
     }
     if(initOver && L1IMiss) {
         timingPrinter.captureL1IMiss();
-    } 
+    }
 
     // Issue
     for (size_t i = 0; i < LEN(core->LD_uop); i++)
@@ -500,6 +493,7 @@ void LogInstructions()
                     state.pd[i].pc = pdInstr.pc << 1;
                     state.pd[i].inst = pdInstr.instr;
                     state.pd[i].fetchID = pdInstr.fetchID;
+                    state.pd[i].predTaken = pdInstr.predTaken;
                     state.pd[i].predTarget = pdInstr.predTarget << 1;
                     if ((state.pd[i].inst & 3) != 3)
                         state.pd[i].inst &= 0xffff;
@@ -909,6 +903,9 @@ void run_fuzz(Args& args)
 
 int main(int argc, char** argv)
 {
+    // Start measuring time
+    auto begin = std::chrono::high_resolution_clock::now();
+
     Verilated::commandArgs(argc, argv); // Remember args
 #ifdef TRACE
     Verilated::traceEverOn(true);
@@ -923,4 +920,12 @@ int main(int argc, char** argv)
     else
         run_sim(args);
     wrap->Final();
+
+    // Stop measuring time and calculate the elapsed time
+    auto end = std::chrono::high_resolution_clock::now();
+    auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(end - begin);
+
+    std::cout << "Total execution time: " << std::fixed  << elapsed.count() * 1e-9 << std::setprecision(5); 
+    std::cout << "s" << std::endl; 
+    return 0; 
 }

@@ -1,6 +1,8 @@
 #pragma once
 #include <stdint.h>
 
+#define OPCODE_LOAD 0x03
+
 struct Inst
 {
     uint32_t inst;
@@ -13,6 +15,7 @@ struct Inst
     uint32_t result;
     uint32_t memAddr;
     uint32_t memData;
+    bool predTaken;
     uint32_t predTarget;
     uint16_t fetchID;
     uint16_t sqn;

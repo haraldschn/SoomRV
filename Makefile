@@ -113,7 +113,7 @@ SRC_FILES = \
 
 .PHONY: soomrv
 soomrv: $(SLANG_HEADER_OUTPUT)
-	verilator $(VERILATOR_FLAGS) $(VERILATOR_CFG) $(SRC_FILES)
+	./verilator/bin/verilator $(VERILATOR_FLAGS) $(VERILATOR_CFG) $(SRC_FILES)
 
 .PHONY: linux
 linux: soomrv
@@ -129,6 +129,8 @@ setup:
 	git submodule update --init --recursive
 	cd riscv-isa-sim && ./configure CFLAGS="-Os -g0" CXXFLAGS="-Os -g0" --with-boost=no --with-boost-asio=no --with-boost-regex=no
 	make -j $(nproc) -C riscv-isa-sim
+	cd verilator && git checkout v5.036 && autoconf && ./configure
+	make -j$(nproc) -C verilator
 
 .PHONY: prepare_header
 prepare_header:

@@ -1,3 +1,6 @@
 [submodule "riscv-isa-sim"]
 	path = riscv-isa-sim
 	url = https://github.com/mathis-s/riscv-isa-sim-SoomRV.git
+[submodule "verilator"]
+	path = verilator
+	url = https://github.com/verilator/verilator.git

@@ -8,7 +8,7 @@
 #include <csignal>
 #include <memory>
 #include <regex>
-#define TOOLCHAIN "riscv32-unknown-elf-"
+#define TOOLCHAIN "riscv64-unknown-elf-"
 
 #include "model_headers.h"
 #include <array>
@@ -591,7 +591,7 @@ void Initialize(int argc, char** argv, Args& args)
                     args.progFile)
                        .c_str()) != 0)
             abort();
-        if (system(TOOLCHAIN "ld --no-warn-rwx-segments -Tlinker.ld test_programs/entry.o temp.o") !=
+        if (system(TOOLCHAIN "ld -m elf32lriscv --no-warn-rwx-segments -Tlinker.ld test_programs/entry.o temp.o") !=
             0)
             abort();
         args.progFile = "a.out";
@@ -643,7 +643,7 @@ void Initialize(int argc, char** argv, Args& args)
             size_t maxSize = pram.size() * sizeof(uint32_t) - (dstBytes - (uint8_t*)pram.data());
 
             auto filename = section.name + ".bin";
-            auto cmd = (TOOLCHAIN "objcopy -I elf32-little -j ") + section.name +
+            auto cmd = (TOOLCHAIN "objcopy --target=riscv32 -I elf32-little -j ") + section.name +
                        (" -O binary " + args.progFile + " " + filename);
             if (system(cmd.c_str()) == -1)
                 abort();
